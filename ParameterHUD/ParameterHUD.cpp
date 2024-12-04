@@ -29,6 +29,11 @@ ID3D11DeviceContext* d3dContext = nullptr;
 bool swapChainOccluded = false;
 HHOOK messageHook = NULL;
 bool done = true;
+ImGuiIO* io = nullptr;
+
+float DEFAULT_POSITION_POS_X = 50.0f;
+float DEFAULT_POSITION_POS_Y = 900.0f;
+float FIXED_POSITION_FONT_SCALE = 3.0f;
 
 typedef HRESULT(WINAPI* D3D11CreateDeviceFn)(
 	IDXGIAdapter* pAdapter,
@@ -180,7 +185,18 @@ void mainLoop() {
 	ImGui::NewFrame();
 
 	// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
+
+	//Our main window
+	ImGui::SetNextWindowBgAlpha(0.0f);
+	ImVec2 defaultPos = ImVec2(DEFAULT_POSITION_POS_X, DEFAULT_POSITION_POS_Y);
+	ImGui::SetNextWindowPos(defaultPos, ImGuiCond_Once);
+	ImGui::Begin("EDF hook", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus);
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	ImGui::Text("Location = %.1f, %.1f, %.1f", xPos, yPos, zPos);
+	ImGui::Text("Ctrl+C to copy...", xPos, yPos, zPos);
+	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io->Framerate, io->Framerate);
+	ImGui::End();
 
 	// Rendering
 	ImGui::Render();
@@ -203,8 +219,7 @@ void mainProcess() {
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;// Enable Keyboard Controls
+	io = &ImGui::GetIO(); (void)io;
 
 	ImGui::StyleColorsDark();
 
@@ -213,6 +228,7 @@ void mainProcess() {
 	ImGui_ImplDX11_Init(d3dDevice, d3dContext);
 
 	//TODO:load font
+	io->FontGlobalScale = FIXED_POSITION_FONT_SCALE;
 
 	// enable Main loop
 	done = false;

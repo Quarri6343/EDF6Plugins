@@ -12,3 +12,4 @@ Clone this repo. Open the project with Visual Studio and build.
 -----------------------
 ## Credits ##
 EDF5 Damage Number Display Mod by Eiton (MIT License)
+imgui by ocornut (MIT License)
