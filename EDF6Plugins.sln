@@ -5,6 +5,13 @@ VisualStudioVersion = 17.12.35514.174 d17.12
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ParameterHUD", "ParameterHUD\ParameterHUD.vcxproj", "{CF0FF961-26AF-422A-94DD-49C54254FBD1}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OutputGameLog", "OutputGameLog\OutputGameLog.vcxproj", "{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ソリューション項目", "ソリューション項目", "{A78DA226-ACEB-4FE0-A57C-2E6AFA48B464}"
+	ProjectSection(SolutionItems) = preProject
+		PluginAPI.h = PluginAPI.h
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +28,14 @@ Global
 		{CF0FF961-26AF-422A-94DD-49C54254FBD1}.Release|x64.Build.0 = Release|x64
 		{CF0FF961-26AF-422A-94DD-49C54254FBD1}.Release|x86.ActiveCfg = Release|Win32
 		{CF0FF961-26AF-422A-94DD-49C54254FBD1}.Release|x86.Build.0 = Release|Win32
+		{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}.Debug|x64.ActiveCfg = Debug|x64
+		{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}.Debug|x64.Build.0 = Debug|x64
+		{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}.Debug|x86.ActiveCfg = Debug|Win32
+		{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}.Debug|x86.Build.0 = Debug|Win32
+		{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}.Release|x64.ActiveCfg = Release|x64
+		{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}.Release|x64.Build.0 = Release|x64
+		{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}.Release|x86.ActiveCfg = Release|Win32
+		{C3254547-0A5C-4E32-BF2C-E39CF4E4C092}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

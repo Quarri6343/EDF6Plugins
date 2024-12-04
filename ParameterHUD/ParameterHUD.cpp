@@ -15,12 +15,17 @@
 //Mod loader
 #include <PluginAPI.h>
 
-extern "C" {
-	uintptr_t hookRetAddress;
+//#include <imgui.h>
+//#include <imgui_impl_win32.h>
+//#include <imgui_impl_dx11.h>
 
-	static float xPos;
-	static float yPos;
-	static float zPos;
+extern "C" {
+	void recordPos();
+	float xPos;
+	float yPos;
+	float zPos;
+	uintptr_t hookRetAddress;
+	uintptr_t loggingAddress;
 
 	BOOL __declspec(dllexport) EML4_Load(PluginInfo* pluginInfo) {
 		return false;
@@ -32,7 +37,7 @@ extern "C" {
 
 	BOOL __declspec(dllexport) EML6_Load(PluginInfo* pluginInfo) {
 		pluginInfo->infoVersion = PluginInfo::MaxInfoVer;
-		pluginInfo->name = "Parameter HUD Plugin";
+		pluginInfo->name = "Parameter HUD";
 		pluginInfo->version = PLUG_VER(1, 0, 0, 0);
 		return true;
 	}
@@ -118,19 +123,24 @@ void* AllocatePageNearAddress(void* targetAddr)
 	return nullptr;
 }
 
-void __declspec(naked) recordPos() {
-	__asm
-	{
-		movups xmm0, xmmword ptr[RSI + 0x90]
-		movss xPos, xmm0
-		movss xmm0, xmmword ptr[RSI + 0x94]
-		movss yPos, xmm0
-		movss xmm0, xmmword ptr[RSI + 0x98]
-		movss zPos, xmm0
 
-		movups xmm0, xmmword ptr[RSI + 0x90] //original instruction
-		mov rax, hookRetAddress //go back
-		jmp rax
+extern "C" void __fastcall createLogFile() {
+	FILE* logFile = nullptr;
+	errno_t err = _wfopen_s(&logFile, L"HUDLog.txt", L"w");
+
+	if (err == 0 && logFile) {
+		fclose(logFile);
+	}
+}
+
+extern "C" void __fastcall logPosition(float x, float y, float z) {
+	FILE* logFile = nullptr;
+	errno_t err = _wfopen_s(&logFile, L"HUDLog.txt", L"a+");
+
+	if (err == 0 && logFile) {
+		fwprintf(logFile, L"%f, %f, %f\n", x, y, z);
+
+		fclose(logFile);
 	}
 }
 
@@ -160,15 +170,18 @@ void hookGetPosFunction() {
 	uint8_t jmpInstruction[7] = { 0xE9, 0x0, 0x0, 0x0, 0x0, 0x90, 0x90 };
 
 
-	const uint64_t relAddr = (uint64_t)memoryBlock - ((uint64_t)originalFunctionAddr + sizeof(jmpInstruction));
+	const uint64_t relAddr = (uint64_t)memoryBlock - ((uint64_t)originalFunctionAddr + 5); //sizeof(jmpInstruction)
 	memcpy(jmpInstruction + 1, &relAddr, 4);
 
 	memcpy(originalFunctionAddr, jmpInstruction, sizeof(jmpInstruction));
+
+	loggingAddress = (uintptr_t)logPosition;
 }
 
 int WINAPI main()
 {
 	hookGetPosFunction();
+	createLogFile();
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule,

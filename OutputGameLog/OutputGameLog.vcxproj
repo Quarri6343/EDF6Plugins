@@ -131,9 +131,6 @@
   <ItemGroup>
     <ClCompile Include="OutputGameLog.cpp" />
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="PluginAPI.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
