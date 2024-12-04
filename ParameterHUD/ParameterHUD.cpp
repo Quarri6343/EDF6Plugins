@@ -15,10 +15,128 @@
 //Mod loader
 #include <PluginAPI.h>
 
-//#include <imgui.h>
-//#include <imgui_impl_win32.h>
-//#include <imgui_impl_dx11.h>
+#include "MinHook.h"
 
+#include <d3d11.h>
+#include <imgui.h>
+#include <imgui_impl_win32.h>
+#include <imgui_impl_dx11.h>
+
+uintptr_t baseAddress;
+HWND hwnd = nullptr;
+ID3D11Device* d3dDevice = nullptr;
+ID3D11DeviceContext* d3dContext = nullptr;
+bool swapChainOccluded = false;
+HHOOK messageHook = NULL;
+bool done = true;
+
+typedef HRESULT(WINAPI* D3D11CreateDeviceFn)(
+	IDXGIAdapter* pAdapter,
+	D3D_DRIVER_TYPE DriverType,
+	HMODULE Software,
+	UINT Flags,
+	const D3D_FEATURE_LEVEL* pFeatureLevels,
+	UINT FeatureLevels,
+	UINT SDKVersion,
+	ID3D11Device** ppDevice,
+	D3D_FEATURE_LEVEL* pFeatureLevel,
+	ID3D11DeviceContext** ppImmediateContext);
+
+D3D11CreateDeviceFn oD3D11CreateDevice = nullptr;
+
+HRESULT WINAPI hkD3D11CreateDevice(
+	IDXGIAdapter* pAdapter,
+	D3D_DRIVER_TYPE DriverType,
+	HMODULE Software,
+	UINT Flags,
+	const D3D_FEATURE_LEVEL* pFeatureLevels,
+	UINT FeatureLevels,
+	UINT SDKVersion,
+	ID3D11Device** ppDevice,
+	D3D_FEATURE_LEVEL* pFeatureLevel,
+	ID3D11DeviceContext** ppImmediateContext)
+{
+	std::cout << "D3D11CreateDevice called!" << std::endl;
+
+	HRESULT hr = oD3D11CreateDevice(
+		pAdapter,
+		DriverType,
+		Software,
+		Flags,
+		pFeatureLevels,
+		FeatureLevels,
+		SDKVersion,
+		ppDevice,
+		pFeatureLevel,
+		ppImmediateContext);
+
+	if (SUCCEEDED(hr)) {
+		if (ppDevice && *ppDevice) {
+			d3dDevice = *ppDevice;
+			d3dDevice->AddRef();
+		}
+		if (ppImmediateContext && *ppImmediateContext) {
+			d3dContext = *ppImmediateContext;
+			d3dContext->AddRef();
+		}
+	}
+
+	return hr;
+}
+
+void initDeviceHook() {
+	if (MH_Initialize() != MH_OK) {
+		return;
+	}
+
+	HMODULE hD3D11 = GetModuleHandle(L"d3d11.dll");
+	if (!hD3D11) {
+		std::cerr << "Failed to get d3d11.dll module handle!" << std::endl;
+		return;
+	}
+
+	void* pD3D11CreateDevice = GetProcAddress(hD3D11, "D3D11CreateDevice");
+	if (!pD3D11CreateDevice) {
+		std::cerr << "Failed to get D3D11CreateDevice address!" << std::endl;
+		return;
+	}
+
+	if (MH_CreateHook(pD3D11CreateDevice, &hkD3D11CreateDevice, reinterpret_cast<LPVOID*>(&oD3D11CreateDevice)) != MH_OK) {
+		std::cerr << "Failed to create hook for D3D11CreateDevice!" << std::endl;
+		return;
+	}
+
+	if (MH_EnableHook(pD3D11CreateDevice) != MH_OK) {
+		std::cerr << "Failed to enable hook for D3D11CreateDevice!" << std::endl;
+		return;
+	}
+}
+
+void unInitDeviceHook() {
+	if (d3dDevice) {
+		d3dDevice->Release();
+		d3dDevice = nullptr;
+	}
+	if (d3dContext) {
+		d3dContext->Release();
+		d3dContext = nullptr;
+	}
+
+	MH_DisableHook(MH_ALL_HOOKS);
+	MH_Uninitialize();
+}
+
+uintptr_t GetPointerAddress(const uintptr_t base, std::initializer_list<int> offsets) {
+	uintptr_t out = base;
+	const int* it = offsets.begin();
+	for (int i = 0; i < offsets.size(); i++) {
+		out = *(uintptr_t*)(out + *(it + i));
+		if (out == 0) {
+			return 0;
+		}
+	}
+	return out;
+}
 extern "C" {
 	void recordPos();
 	float xPos;
@@ -41,6 +159,82 @@ extern "C" {
 		pluginInfo->version = PLUG_VER(1, 0, 0, 0);
 		return true;
 	}
+}
+
+void mainLoop() {
+	if (done)
+		return;
+
+	// Handle window resize (we don't resize directly in the WM_SIZE handler)
+	//if (g_ResizeWidth != 0 && g_ResizeHeight != 0)
+	//{
+	//	CleanupRenderTarget();
+	//	g_pSwapChain->ResizeBuffers(0, g_ResizeWidth, g_ResizeHeight, DXGI_FORMAT_UNKNOWN, 0);
+	//	g_ResizeWidth = g_ResizeHeight = 0;
+	//	CreateRenderTarget();
+	//}
+
+	// Start the Dear ImGui frame
+	ImGui_ImplDX11_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+
+	// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+	ImGui::ShowDemoWindow();
+
+	// Rendering
+	ImGui::Render();
+	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+}
+
+void mainProcess() {
+
+	initDeviceHook();
+	while (d3dDevice == nullptr || d3dContext == nullptr) {
+		Sleep(1000);
+	}
+
+	//EDF.dll + 0x21360E8
+	HWND* hwndPTR = reinterpret_cast<HWND*>(baseAddress + 0x21360E8);
+	while (*hwndPTR == nullptr) {
+		Sleep(1000);
+	}
+	hwnd = *hwndPTR;
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;// Enable Keyboard Controls
+
+	ImGui::StyleColorsDark();
+
+	// Setup Platform/Renderer backends
+	ImGui_ImplWin32_Init(hwnd);
+	ImGui_ImplDX11_Init(d3dDevice, d3dContext);
+
+	//TODO:load font
+
+	// enable Main loop
+	done = false;
+	loggingAddress = (uintptr_t)mainLoop;
+}
+
+void endProcess() {
+	ImGui_ImplDX11_Shutdown();
+	ImGui_ImplWin32_Shutdown();
+	ImGui::DestroyContext();
+	unInitDeviceHook();
+}
+
+LRESULT CALLBACK MessageProc(int nCode, WPARAM wParam, LPARAM lParam) {
+	if (nCode == HC_ACTION) {
+		MSG* msg = (MSG*)lParam;
+		if (msg->message == WM_QUIT && done == false) {
+			done = true;
+			endProcess();
+		}
+	}
+	return CallNextHookEx(messageHook, nCode, wParam, lParam);
 }
 
 bool get_module_bounds(const std::wstring name, uintptr_t* start, uintptr_t* end)
@@ -147,7 +341,7 @@ extern "C" void __fastcall logPosition(float x, float y, float z) {
 void hookGetPosFunction() {
 	void* originalFunctionAddr = (void*)(sigscan(
 		L"EDF.dll",
-		"\x0F\x10\x86\x90\x00\x00\x00\x66\x0F\x7F\x44\x24\x50",
+		"\x0F\x10\x86\x90\x00\x00\x00\x66\x0F\x7F\x44\x24\x50", //hooks Radar HUD update
 		"xxxxxxxxxxxxx"));
 	hookRetAddress = (uint64_t)originalFunctionAddr + 0x7;
 
@@ -175,13 +369,15 @@ void hookGetPosFunction() {
 
 	memcpy(originalFunctionAddr, jmpInstruction, sizeof(jmpInstruction));
 
-	loggingAddress = (uintptr_t)logPosition;
+	//loggingAddress = (uintptr_t)logPosition;
 }
 
 int WINAPI main()
 {
+	baseAddress = (uintptr_t)GetModuleHandle(L"EDF.dll");
 	hookGetPosFunction();
 	createLogFile();
+	mainProcess();
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule,
@@ -195,10 +391,15 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	{
 		DisableThreadLibraryCalls(hModule);
 		CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)main, NULL, NULL, NULL);
+		messageHook = SetWindowsHookEx(WH_MSGFILTER, MessageProc, hModule, 0);
 	}
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
-	case DLL_PROCESS_DETACH:
+	case DLL_PROCESS_DETACH: 
+	{
+		UnhookWindowsHookEx(messageHook);
+		messageHook = NULL;
+	}
 		break;
 	}
 	return TRUE;
