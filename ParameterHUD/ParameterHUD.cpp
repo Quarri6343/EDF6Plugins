@@ -28,7 +28,8 @@ ID3D11Device* d3dDevice = nullptr;
 ID3D11DeviceContext* d3dContext = nullptr;
 bool swapChainOccluded = false;
 HHOOK messageHook = NULL;
-bool done = true;
+bool init = false;
+bool done = false;
 ImGuiIO* io = nullptr;
 
 float DEFAULT_POSITION_POS_X = 50.0f;
@@ -167,7 +168,7 @@ extern "C" {
 }
 
 void mainLoop() {
-	if (done)
+	if (!init || done)
 		return;
 
 	// Handle window resize (we don't resize directly in the WM_SIZE handler)
@@ -231,7 +232,7 @@ void mainProcess() {
 	io->FontGlobalScale = FIXED_POSITION_FONT_SCALE;
 
 	// enable Main loop
-	done = false;
+	init = true;
 	loggingAddress = (uintptr_t)mainLoop;
 }
 
@@ -388,6 +389,45 @@ void hookGetPosFunction() {
 	//loggingAddress = (uintptr_t)logPosition;
 }
 
+bool IsCtrlCPressed() {
+	bool ctrlPressed = GetAsyncKeyState(VK_CONTROL) & 0x8000;
+	bool cPressed = GetAsyncKeyState('C') & 0x8000;
+	return ctrlPressed && cPressed;
+}
+
+void CopyToClipboard(const std::wstring& text) {
+	if (OpenClipboard(nullptr)) {
+		EmptyClipboard();
+
+		size_t size = (text.size() + 1) * sizeof(wchar_t);
+		HGLOBAL hGlobal = GlobalAlloc(GMEM_MOVEABLE, size);
+		
+		if (hGlobal != 0) {
+			wchar_t* clipboardText = (wchar_t*)GlobalLock(hGlobal);
+			if (clipboardText != 0) {
+				wcscpy_s(clipboardText, size / sizeof(wchar_t), text.c_str());
+				SetClipboardData(CF_UNICODETEXT, hGlobal);
+			}
+			GlobalUnlock(hGlobal);
+		}
+		CloseClipboard();
+	}
+}
+
+void MonitorKeys() {
+	while (!done) {
+		if (IsCtrlCPressed() && xPos != 0 && yPos != 0 && zPos != 0) {
+			char buffer[100];
+			sprintf_s(buffer, sizeof(buffer), "[ %.3f, %.3f, %.3f ]\n", xPos, yPos, zPos);
+
+			std::wstring text(buffer, buffer + strlen(buffer));
+			CopyToClipboard(text);
+		}
+
+		Sleep(10);
+	}
+}
+
 int WINAPI main()
 {
 	baseAddress = (uintptr_t)GetModuleHandle(L"EDF.dll");
@@ -407,6 +447,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	{
 		DisableThreadLibraryCalls(hModule);
 		CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)main, NULL, NULL, NULL);
+		CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)MonitorKeys, NULL, NULL, NULL);
 		messageHook = SetWindowsHookEx(WH_MSGFILTER, MessageProc, hModule, 0);
 	}
 	case DLL_THREAD_ATTACH:
