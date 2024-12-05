@@ -178,6 +178,7 @@
     <ClInclude Include="..\minhook\src\hde\hde32.h" />
     <ClInclude Include="..\minhook\src\hde\hde64.h" />
     <ClInclude Include="..\minhook\src\trampoline.h" />
+    <ClInclude Include="fnt.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
