@@ -36,6 +36,8 @@ float DEFAULT_POSITION_POS_X = 50.0f;
 float DEFAULT_POSITION_POS_Y = 900.0f;
 float FIXED_POSITION_FONT_SCALE = 3.0f;
 
+void mainLoop();
+
 typedef HRESULT(WINAPI* D3D11CreateDeviceFn)(
 	IDXGIAdapter* pAdapter,
 	D3D_DRIVER_TYPE DriverType,
@@ -90,11 +92,17 @@ HRESULT WINAPI hkD3D11CreateDevice(
 	return hr;
 }
 
-void initDeviceHook() {
-	if (MH_Initialize() != MH_OK) {
-		return;
-	}
+using UpdateRadarFuncType = void(__fastcall*)(__int64, __int64);
+UpdateRadarFuncType oUpdateRadar = nullptr;
 
+void __fastcall hkUpdateRadar(__int64 a1, __int64 a2)
+{
+	oUpdateRadar(a1, a2);
+
+	mainLoop();
+}
+
+void initDeviceHook() {
 	HMODULE hD3D11 = GetModuleHandle(L"d3d11.dll");
 	if (!hD3D11) {
 		std::cerr << "Failed to get d3d11.dll module handle!" << std::endl;
@@ -127,9 +135,20 @@ void unInitDeviceHook() {
 		d3dContext->Release();
 		d3dContext = nullptr;
 	}
+}
 
-	MH_DisableHook(MH_ALL_HOOKS);
-	MH_Uninitialize();
+void initRadarHook() {
+	void* pUpdateRadar = reinterpret_cast<LPVOID>(baseAddress + 0x82B1F0);
+
+	if (MH_CreateHook(pUpdateRadar, &hkUpdateRadar, reinterpret_cast<LPVOID*>(&oUpdateRadar)) != MH_OK) {
+		std::cerr << "Failed to create hook for UpdateRadar!" << std::endl;
+		return;
+	}
+
+	if (MH_EnableHook(pUpdateRadar) != MH_OK) {
+		std::cerr << "Failed to enable hook for UpdateRadar!" << std::endl;
+		return;
+	}
 }
 
 uintptr_t GetPointerAddress(const uintptr_t base, std::initializer_list<int> offsets) {
@@ -143,6 +162,7 @@ uintptr_t GetPointerAddress(const uintptr_t base, std::initializer_list<int> off
 	}
 	return out;
 }
+
 extern "C" {
 	void recordPos();
 	float xPos;
@@ -205,8 +225,11 @@ void mainLoop() {
 }
 
 void mainProcess() {
-
+	if (MH_Initialize() != MH_OK) {
+		return;
+	}
 	initDeviceHook();
+	initRadarHook();
 	while (d3dDevice == nullptr || d3dContext == nullptr) {
 		Sleep(1000);
 	}
@@ -241,6 +264,8 @@ void endProcess() {
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 	unInitDeviceHook();
+	MH_DisableHook(MH_ALL_HOOKS);
+	MH_Uninitialize();
 }
 
 LRESULT CALLBACK MessageProc(int nCode, WPARAM wParam, LPARAM lParam) {
@@ -432,7 +457,7 @@ int WINAPI main()
 {
 	baseAddress = (uintptr_t)GetModuleHandle(L"EDF.dll");
 	hookGetPosFunction();
-	createLogFile();
+	//createLogFile();
 	mainProcess();
 }
 
