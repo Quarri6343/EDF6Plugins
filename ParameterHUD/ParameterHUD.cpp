@@ -1,4 +1,8 @@
 ﻿
+#include "ParameterHUD.h"
+#include "MemoryUtils.h"
+#include "FunctionHooks.h"
+
 // Standard imports
 #include <windows.h>
 #include <psapi.h>
@@ -15,19 +19,19 @@
 //Mod loader
 #include <PluginAPI.h>
 
-#include "MinHook.h"
-
+//Libraries
+#include <MinHook.h>
 #include <d3d11.h>
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
 #include <fnt.h>
 
-uintptr_t baseAddress;
+extern uintptr_t hedfDLL;
+extern ID3D11Device* d3dDevice;
+extern ID3D11DeviceContext* d3dContext;
+
 HWND hwnd = nullptr;
-ID3D11Device* d3dDevice = nullptr;
-ID3D11DeviceContext* d3dContext = nullptr;
-bool swapChainOccluded = false;
 HHOOK messageHook = NULL;
 bool init = false;
 bool done = false;
@@ -36,133 +40,6 @@ ImGuiIO* io = nullptr;
 float DEFAULT_POSITION_POS_X = 50.0f;
 float DEFAULT_POSITION_POS_Y = 900.0f;
 float FIXED_FONT_SIZE = 38.0f;
-
-void MainLoop();
-
-typedef HRESULT(WINAPI* D3D11CreateDeviceFn)(
-	IDXGIAdapter* pAdapter,
-	D3D_DRIVER_TYPE DriverType,
-	HMODULE Software,
-	UINT Flags,
-	const D3D_FEATURE_LEVEL* pFeatureLevels,
-	UINT FeatureLevels,
-	UINT SDKVersion,
-	ID3D11Device** ppDevice,
-	D3D_FEATURE_LEVEL* pFeatureLevel,
-	ID3D11DeviceContext** ppImmediateContext);
-
-D3D11CreateDeviceFn oD3D11CreateDevice = nullptr;
-
-HRESULT WINAPI hkD3D11CreateDevice(
-	IDXGIAdapter* pAdapter,
-	D3D_DRIVER_TYPE DriverType,
-	HMODULE Software,
-	UINT Flags,
-	const D3D_FEATURE_LEVEL* pFeatureLevels,
-	UINT FeatureLevels,
-	UINT SDKVersion,
-	ID3D11Device** ppDevice,
-	D3D_FEATURE_LEVEL* pFeatureLevel,
-	ID3D11DeviceContext** ppImmediateContext)
-{
-	std::cout << "D3D11CreateDevice called!" << std::endl;
-
-	HRESULT hr = oD3D11CreateDevice(
-		pAdapter,
-		DriverType,
-		Software,
-		Flags,
-		pFeatureLevels,
-		FeatureLevels,
-		SDKVersion,
-		ppDevice,
-		pFeatureLevel,
-		ppImmediateContext);
-
-	if (SUCCEEDED(hr)) {
-		if (ppDevice && *ppDevice) {
-			d3dDevice = *ppDevice;
-			d3dDevice->AddRef();
-		}
-		if (ppImmediateContext && *ppImmediateContext) {
-			d3dContext = *ppImmediateContext;
-			d3dContext->AddRef();
-		}
-	}
-
-	return hr;
-}
-
-using UpdateRadarFuncType = void(__fastcall*)(__int64, __int64);
-UpdateRadarFuncType oUpdateRadar = nullptr;
-
-void __fastcall hkUpdateRadar(__int64 a1, __int64 a2)
-{
-	oUpdateRadar(a1, a2);
-
-	MainLoop();
-}
-
-void InitDeviceHook() {
-	HMODULE hD3D11 = GetModuleHandle(L"d3d11.dll");
-	if (!hD3D11) {
-		std::cerr << "Failed to get d3d11.dll module handle!" << std::endl;
-		return;
-	}
-
-	void* pD3D11CreateDevice = GetProcAddress(hD3D11, "D3D11CreateDevice");
-	if (!pD3D11CreateDevice) {
-		std::cerr << "Failed to get D3D11CreateDevice address!" << std::endl;
-		return;
-	}
-
-	if (MH_CreateHook(pD3D11CreateDevice, &hkD3D11CreateDevice, reinterpret_cast<LPVOID*>(&oD3D11CreateDevice)) != MH_OK) {
-		std::cerr << "Failed to create hook for D3D11CreateDevice!" << std::endl;
-		return;
-	}
-
-	if (MH_EnableHook(pD3D11CreateDevice) != MH_OK) {
-		std::cerr << "Failed to enable hook for D3D11CreateDevice!" << std::endl;
-		return;
-	}
-}
-
-void UnInitDeviceHook() {
-	if (d3dDevice) {
-		d3dDevice->Release();
-		d3dDevice = nullptr;
-	}
-	if (d3dContext) {
-		d3dContext->Release();
-		d3dContext = nullptr;
-	}
-}
-
-void InitRadarHook() {
-	void* pUpdateRadar = reinterpret_cast<LPVOID>(baseAddress + 0x82B1F0);
-
-	if (MH_CreateHook(pUpdateRadar, &hkUpdateRadar, reinterpret_cast<LPVOID*>(&oUpdateRadar)) != MH_OK) {
-		std::cerr << "Failed to create hook for UpdateRadar!" << std::endl;
-		return;
-	}
-
-	if (MH_EnableHook(pUpdateRadar) != MH_OK) {
-		std::cerr << "Failed to enable hook for UpdateRadar!" << std::endl;
-		return;
-	}
-}
-
-uintptr_t GetPointerAddress(const uintptr_t base, std::initializer_list<int> offsets) {
-	uintptr_t out = base;
-	const int* it = offsets.begin();
-	for (int i = 0; i < offsets.size(); i++) {
-		out = *(uintptr_t*)(out + *(it + i));
-		if (out == 0) {
-			return 0;
-		}
-	}
-	return out;
-}
 
 extern "C" {
 	void RecordPos();
@@ -255,7 +132,7 @@ void MainProcess() {
 	}
 
 	//EDF.dll + 0x21360E8
-	HWND* hwndPTR = reinterpret_cast<HWND*>(baseAddress + 0x21360E8);
+	HWND* hwndPTR = reinterpret_cast<HWND*>(hedfDLL + 0x21360E8);
 	while (*hwndPTR == nullptr) {
 		Sleep(1000);
 	}
@@ -296,86 +173,6 @@ LRESULT CALLBACK MessageProc(int nCode, WPARAM wParam, LPARAM lParam) {
 		}
 	}
 	return CallNextHookEx(messageHook, nCode, wParam, lParam);
-}
-
-bool GetModuleBounds(const std::wstring name, uintptr_t* start, uintptr_t* end)
-{
-	const auto module = GetModuleHandle(name.c_str());
-	if (module == nullptr)
-		return false;
-
-	MODULEINFO info;
-	GetModuleInformation(GetCurrentProcess(), module, &info, sizeof(info));
-	*start = (uintptr_t)(info.lpBaseOfDll);
-	*end = *start + info.SizeOfImage;
-	return true;
-}
-
-// Scan for a byte pattern with a mask in the form of "xxx???xxx".
-uintptr_t SigScan(const std::wstring name, const char* sig, const char* mask)
-{
-	uintptr_t start, end;
-	if (!GetModuleBounds(name, &start, &end))
-		throw std::runtime_error("Module not loaded");
-
-	const auto last_scan = end - strlen(mask) + 1;
-
-	for (auto addr = start; addr < last_scan; addr++) {
-		for (size_t i = 0;; i++) {
-			if (mask[i] == '\0')
-				return addr;
-			if (mask[i] != '?' && sig[i] != *(char*)(addr + i))
-				break;
-		}
-	}
-
-	return NULL;
-}
-
-void* AllocatePageNearAddress(void* targetAddr)
-{
-	SYSTEM_INFO sysInfo;
-	GetSystemInfo(&sysInfo);
-	const uint64_t PAGE_SIZE = sysInfo.dwPageSize;
-
-	uint64_t startAddr = (uint64_t(targetAddr) & ~(PAGE_SIZE - 1)); //round down to nearest page boundary
-	uint64_t minAddr = min(startAddr - 0x7FFFFF00, (uint64_t)sysInfo.lpMinimumApplicationAddress);
-	uint64_t maxAddr = max(startAddr + 0x7FFFFF00, (uint64_t)sysInfo.lpMaximumApplicationAddress);
-
-	uint64_t startPage = (startAddr - (startAddr % PAGE_SIZE));
-
-	uint64_t pageOffset = 1;
-	while (1)
-	{
-		uint64_t byteOffset = pageOffset * PAGE_SIZE;
-		uint64_t highAddr = startPage + byteOffset;
-		uint64_t lowAddr = (startPage > byteOffset) ? startPage - byteOffset : 0;
-
-		bool needsExit = highAddr > maxAddr && lowAddr < minAddr;
-
-		if (highAddr < maxAddr)
-		{
-			void* outAddr = VirtualAlloc((void*)highAddr, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-			if (outAddr)
-				return outAddr;
-		}
-
-		if (lowAddr > minAddr)
-		{
-			void* outAddr = VirtualAlloc((void*)lowAddr, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-			if (outAddr != nullptr)
-				return outAddr;
-		}
-
-		pageOffset++;
-
-		if (needsExit)
-		{
-			break;
-		}
-	}
-
-	return nullptr;
 }
 
 
@@ -474,7 +271,6 @@ void MonitorKeys() {
 
 int WINAPI main()
 {
-	baseAddress = (uintptr_t)GetModuleHandle(L"EDF.dll");
 	HookGetPosFunction();
 	//createLogFile();
 	MainProcess();
