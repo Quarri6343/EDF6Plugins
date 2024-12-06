@@ -4,7 +4,7 @@ EXTERN zPos : dword
 EXTERN hookRetAddress : qword
 
 .code
-recordPos proc
+RecordPos proc
 	movss xmm0, dword ptr[rsi + 90h]
 	movss dword ptr [xPos], xmm0
 	movss xmm0, dword ptr[rsi + 94h]
@@ -13,5 +13,5 @@ recordPos proc
 	movss dword ptr [zPos], xmm0
 	movups xmm0, xmmword ptr[rsi + 90h]
 	jmp hookRetAddress
-recordPos endp
+RecordPos endp
 end

@@ -37,7 +37,7 @@ float DEFAULT_POSITION_POS_X = 50.0f;
 float DEFAULT_POSITION_POS_Y = 900.0f;
 float FIXED_FONT_SIZE = 38.0f;
 
-void mainLoop();
+void MainLoop();
 
 typedef HRESULT(WINAPI* D3D11CreateDeviceFn)(
 	IDXGIAdapter* pAdapter,
@@ -100,10 +100,10 @@ void __fastcall hkUpdateRadar(__int64 a1, __int64 a2)
 {
 	oUpdateRadar(a1, a2);
 
-	mainLoop();
+	MainLoop();
 }
 
-void initDeviceHook() {
+void InitDeviceHook() {
 	HMODULE hD3D11 = GetModuleHandle(L"d3d11.dll");
 	if (!hD3D11) {
 		std::cerr << "Failed to get d3d11.dll module handle!" << std::endl;
@@ -127,7 +127,7 @@ void initDeviceHook() {
 	}
 }
 
-void unInitDeviceHook() {
+void UnInitDeviceHook() {
 	if (d3dDevice) {
 		d3dDevice->Release();
 		d3dDevice = nullptr;
@@ -138,7 +138,7 @@ void unInitDeviceHook() {
 	}
 }
 
-void initRadarHook() {
+void InitRadarHook() {
 	void* pUpdateRadar = reinterpret_cast<LPVOID>(baseAddress + 0x82B1F0);
 
 	if (MH_CreateHook(pUpdateRadar, &hkUpdateRadar, reinterpret_cast<LPVOID*>(&oUpdateRadar)) != MH_OK) {
@@ -165,7 +165,7 @@ uintptr_t GetPointerAddress(const uintptr_t base, std::initializer_list<int> off
 }
 
 extern "C" {
-	void recordPos();
+	void RecordPos();
 	float xPos;
 	float yPos;
 	float zPos;
@@ -195,15 +195,15 @@ void DrawTextWithBackground(ImVec4 textColor, ImVec4 bgColor, const char* fmt...
 	vsnprintf(buffer, sizeof(buffer), fmt, args);
 	va_end(args);
 
-	ImVec2 text_size = ImGui::CalcTextSize(buffer);
+	ImVec2 textSize = ImGui::CalcTextSize(buffer);
 	ImVec2 pos = ImGui::GetCursorScreenPos();
 
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
-	draw_list->AddRectFilled(pos, ImVec2(pos.x + text_size.x, pos.y + text_size.y), ImColor(bgColor));
+	draw_list->AddRectFilled(pos, ImVec2(pos.x + textSize.x, pos.y + textSize.y), ImColor(bgColor));
 	ImGui::TextColored(textColor, "%s", buffer);
 }
 
-void mainLoop() {
+void MainLoop() {
 	if (!init || done)
 		return;
 
@@ -244,12 +244,12 @@ void mainLoop() {
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
-void mainProcess() {
+void MainProcess() {
 	if (MH_Initialize() != MH_OK) {
 		return;
 	}
-	initDeviceHook();
-	initRadarHook();
+	InitDeviceHook();
+	InitRadarHook();
 	while (d3dDevice == nullptr || d3dContext == nullptr) {
 		Sleep(1000);
 	}
@@ -275,14 +275,14 @@ void mainProcess() {
 
 	// enable Main loop
 	init = true;
-	loggingAddress = (uintptr_t)mainLoop;
+	loggingAddress = (uintptr_t)MainLoop;
 }
 
-void endProcess() {
+void EndProcess() {
 	ImGui_ImplDX11_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
-	unInitDeviceHook();
+	UnInitDeviceHook();
 	MH_DisableHook(MH_ALL_HOOKS);
 	MH_Uninitialize();
 }
@@ -292,13 +292,13 @@ LRESULT CALLBACK MessageProc(int nCode, WPARAM wParam, LPARAM lParam) {
 		MSG* msg = (MSG*)lParam;
 		if (msg->message == WM_QUIT && done == false) {
 			done = true;
-			endProcess();
+			EndProcess();
 		}
 	}
 	return CallNextHookEx(messageHook, nCode, wParam, lParam);
 }
 
-bool get_module_bounds(const std::wstring name, uintptr_t* start, uintptr_t* end)
+bool GetModuleBounds(const std::wstring name, uintptr_t* start, uintptr_t* end)
 {
 	const auto module = GetModuleHandle(name.c_str());
 	if (module == nullptr)
@@ -312,10 +312,10 @@ bool get_module_bounds(const std::wstring name, uintptr_t* start, uintptr_t* end
 }
 
 // Scan for a byte pattern with a mask in the form of "xxx???xxx".
-uintptr_t sigscan(const std::wstring name, const char* sig, const char* mask)
+uintptr_t SigScan(const std::wstring name, const char* sig, const char* mask)
 {
 	uintptr_t start, end;
-	if (!get_module_bounds(name, &start, &end))
+	if (!GetModuleBounds(name, &start, &end))
 		throw std::runtime_error("Module not loaded");
 
 	const auto last_scan = end - strlen(mask) + 1;
@@ -379,7 +379,7 @@ void* AllocatePageNearAddress(void* targetAddr)
 }
 
 
-extern "C" void __fastcall createLogFile() {
+extern "C" void __fastcall CreateLogFile() {
 	FILE* logFile = nullptr;
 	errno_t err = _wfopen_s(&logFile, L"HUDLog.txt", L"w");
 
@@ -388,7 +388,7 @@ extern "C" void __fastcall createLogFile() {
 	}
 }
 
-extern "C" void __fastcall logPosition(float x, float y, float z) {
+extern "C" void __fastcall LogPosition(float x, float y, float z) {
 	FILE* logFile = nullptr;
 	errno_t err = _wfopen_s(&logFile, L"HUDLog.txt", L"a+");
 
@@ -399,8 +399,8 @@ extern "C" void __fastcall logPosition(float x, float y, float z) {
 	}
 }
 
-void hookGetPosFunction() {
-	void* originalFunctionAddr = (void*)(sigscan(
+void HookGetPosFunction() {
+	void* originalFunctionAddr = (void*)(SigScan(
 		L"EDF.dll",
 		"\x0F\x10\x86\x90\x00\x00\x00\x66\x0F\x7F\x44\x24\x50", //hooks Radar HUD update
 		"xxxxxxxxxxxxx"));
@@ -414,7 +414,7 @@ void hookGetPosFunction() {
 		0x48, 0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //mov rax, addr
 		0xFF, 0xE0 //jmp rax
 	};
-	uint64_t addrToJumpTo64 = (uint64_t)recordPos; //Hook Function
+	uint64_t addrToJumpTo64 = (uint64_t)RecordPos; //Hook Function
 
 	memcpy(&hookFunction[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
 	memcpy(memoryBlock, hookFunction, sizeof(hookFunction));
@@ -475,9 +475,9 @@ void MonitorKeys() {
 int WINAPI main()
 {
 	baseAddress = (uintptr_t)GetModuleHandle(L"EDF.dll");
-	hookGetPosFunction();
+	HookGetPosFunction();
 	//createLogFile();
-	mainProcess();
+	MainProcess();
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule,

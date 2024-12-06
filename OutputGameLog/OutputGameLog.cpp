@@ -32,7 +32,7 @@ extern "C" {
 	}
 }
 
-bool get_module_bounds(const std::wstring name, uintptr_t* start, uintptr_t* end)
+bool GetModuleBounds(const std::wstring name, uintptr_t* start, uintptr_t* end)
 {
 	const auto module = GetModuleHandle(name.c_str());
 	if (module == nullptr)
@@ -46,10 +46,10 @@ bool get_module_bounds(const std::wstring name, uintptr_t* start, uintptr_t* end
 }
 
 // Scan for a byte pattern with a mask in the form of "xxx???xxx".
-uintptr_t sigscan(const std::wstring name, const char* sig, const char* mask)
+uintptr_t SigScan(const std::wstring name, const char* sig, const char* mask)
 {
 	uintptr_t start, end;
-	if (!get_module_bounds(name, &start, &end))
+	if (!GetModuleBounds(name, &start, &end))
 		throw std::runtime_error("Module not loaded");
 
 	const auto last_scan = end - strlen(mask) + 1;
@@ -108,7 +108,7 @@ static void logSpecialCase(FILE* logFile, wchar_t* format, va_list args) {
 	}
 }
 
-extern "C" void __fastcall createLogFile() {
+extern "C" void __fastcall CreateLogFile() {
 	FILE* logFile = nullptr;
 	errno_t err = _wfopen_s(&logFile, L"GameLog.txt", L"w");
 
@@ -139,7 +139,7 @@ extern "C" void __fastcall logFunction(wchar_t* format, ...) {
 }
 
 void hookLogfunction() {
-	void* originalFunctionAddr = (void*)(sigscan(
+	void* originalFunctionAddr = (void*)(SigScan(
 		L"EDF.dll",
 		"\x48\x89\x54\x24\x10\x4C\x89\x44\x24\x18\x4C\x89\x4C\x24\x20\xC3\xF3\x0F\x10\x41\x04\xF3\x0F\x58\x01\xF3\x0F\x58\x41\x08\x0F",
 		"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"));
@@ -161,7 +161,7 @@ void hookLogfunction() {
 
 int WINAPI main()
 {
-	createLogFile();
+	CreateLogFile();
 	hookLogfunction();
 }
 
