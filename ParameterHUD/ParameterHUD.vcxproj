@@ -156,6 +156,7 @@
     <ClCompile Include="..\minhook\src\hook.c" />
     <ClCompile Include="..\minhook\src\trampoline.c" />
     <ClCompile Include="FunctionHooks.cpp" />
+    <ClCompile Include="HUDHandler.cpp" />
     <ClCompile Include="MemoryUtils.cpp" />
     <ClCompile Include="ParameterHUD.cpp" />
   </ItemGroup>
@@ -182,8 +183,8 @@
     <ClInclude Include="..\minhook\src\trampoline.h" />
     <ClInclude Include="fnt.h" />
     <ClInclude Include="FunctionHooks.h" />
+    <ClInclude Include="HUDHandler.h" />
     <ClInclude Include="MemoryUtils.h" />
-    <ClInclude Include="ParameterHUD.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

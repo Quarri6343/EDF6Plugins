@@ -1,20 +1,15 @@
 ﻿
-#include "ParameterHUD.h"
 #include "MemoryUtils.h"
 #include "FunctionHooks.h"
+#include "HUDHandler.h"
 
 // Standard imports
 #include <windows.h>
-#include <psapi.h>
 #include <iostream>
-#include <iomanip>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
 #include <format>
-#include <stdexcept>
-#include <list>
-#include <map>
 
 //Mod loader
 #include <PluginAPI.h>
@@ -22,10 +17,6 @@
 //Libraries
 #include <MinHook.h>
 #include <d3d11.h>
-#include <imgui.h>
-#include <imgui_impl_win32.h>
-#include <imgui_impl_dx11.h>
-#include <fnt.h>
 
 extern uintptr_t hedfDLL;
 extern ID3D11Device* d3dDevice;
@@ -33,13 +24,8 @@ extern ID3D11DeviceContext* d3dContext;
 
 HWND hwnd = nullptr;
 HHOOK messageHook = NULL;
-bool init = false;
-bool done = false;
-ImGuiIO* io = nullptr;
-
-float DEFAULT_POSITION_POS_X = 50.0f;
-float DEFAULT_POSITION_POS_Y = 900.0f;
-float FIXED_FONT_SIZE = 38.0f;
+bool dllReady = false;
+bool dllEnd = false;
 
 extern "C" {
 	void RecordPos();
@@ -65,62 +51,6 @@ extern "C" {
 	}
 }
 
-void DrawTextWithBackground(ImVec4 textColor, ImVec4 bgColor, const char* fmt...) {
-	va_list args;
-	va_start(args, fmt);
-	char buffer[256];
-	vsnprintf(buffer, sizeof(buffer), fmt, args);
-	va_end(args);
-
-	ImVec2 textSize = ImGui::CalcTextSize(buffer);
-	ImVec2 pos = ImGui::GetCursorScreenPos();
-
-	ImDrawList* draw_list = ImGui::GetWindowDrawList();
-	draw_list->AddRectFilled(pos, ImVec2(pos.x + textSize.x, pos.y + textSize.y), ImColor(bgColor));
-	ImGui::TextColored(textColor, "%s", buffer);
-}
-
-void MainLoop() {
-	if (!init || done)
-		return;
-
-	// Handle window resize (we don't resize directly in the WM_SIZE handler)
-	//if (g_ResizeWidth != 0 && g_ResizeHeight != 0)
-	//{
-	//	CleanupRenderTarget();
-	//	g_pSwapChain->ResizeBuffers(0, g_ResizeWidth, g_ResizeHeight, DXGI_FORMAT_UNKNOWN, 0);
-	//	g_ResizeWidth = g_ResizeHeight = 0;
-	//	CreateRenderTarget();
-	//}
-
-	// Start the Dear ImGui frame
-	ImGui_ImplDX11_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-
-	// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-	//ImGui::ShowDemoWindow();
-
-	//Our main window
-	ImGui::SetNextWindowBgAlpha(0.0f);
-	ImVec2 defaultPos = ImVec2(DEFAULT_POSITION_POS_X, DEFAULT_POSITION_POS_Y);
-	ImGui::SetNextWindowPos(defaultPos, ImGuiCond_Once);
-	ImGui::Begin("EDF hook", NULL, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus);
-	ImDrawList* dl = ImGui::GetWindowDrawList();
-
-	ImVec4 yellow = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
-	ImVec4 black = ImVec4(0.0f, 0.0f, 0.0f, 0.5f);
-
-	DrawTextWithBackground(yellow, black, "Location = %.1f, %.1f, %.1f", xPos, yPos, zPos);
-	DrawTextWithBackground(yellow, black, "Ctrl+C to copy...");
-	DrawTextWithBackground(yellow, black, "Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io->Framerate, io->Framerate);
-	ImGui::End();
-
-	// Rendering
-	ImGui::Render();
-	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-}
-
 void MainProcess() {
 	if (MH_Initialize() != MH_OK) {
 		return;
@@ -138,27 +68,15 @@ void MainProcess() {
 	}
 	hwnd = *hwndPTR;
 
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	io = &ImGui::GetIO(); (void)io;
-
-	ImGui::StyleColorsDark();
-
-	// Setup Platform/Renderer backends
-	ImGui_ImplWin32_Init(hwnd);
-	ImGui_ImplDX11_Init(d3dDevice, d3dContext);
-
-	io->Fonts->AddFontFromMemoryCompressedTTF(robotomono_compressed_data, robotomono_compressed_size, FIXED_FONT_SIZE);
+	Initimgui(d3dDevice, d3dContext, hwnd);
 
 	// enable Main loop
-	init = true;
-	loggingAddress = (uintptr_t)MainLoop;
+	dllReady = true;
+	loggingAddress = (uintptr_t)DrawHUD;
 }
 
 void EndProcess() {
-	ImGui_ImplDX11_Shutdown();
-	ImGui_ImplWin32_Shutdown();
-	ImGui::DestroyContext();
+	Shutdownimgui();
 	UnInitDeviceHook();
 	MH_DisableHook(MH_ALL_HOOKS);
 	MH_Uninitialize();
@@ -167,8 +85,8 @@ void EndProcess() {
 LRESULT CALLBACK MessageProc(int nCode, WPARAM wParam, LPARAM lParam) {
 	if (nCode == HC_ACTION) {
 		MSG* msg = (MSG*)lParam;
-		if (msg->message == WM_QUIT && done == false) {
-			done = true;
+		if (msg->message == WM_QUIT && dllEnd == false) {
+			dllEnd = true;
 			EndProcess();
 		}
 	}
@@ -256,7 +174,7 @@ void CopyToClipboard(const std::wstring& text) {
 }
 
 void MonitorKeys() {
-	while (!done) {
+	while (!dllEnd) {
 		if (IsCtrlCPressed() && xPos != 0 && yPos != 0 && zPos != 0) {
 			char buffer[100];
 			sprintf_s(buffer, sizeof(buffer), "[ %.3f, %.3f, %.3f ]\n", xPos, yPos, zPos);

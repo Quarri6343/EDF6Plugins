@@ -72,7 +72,7 @@ void __fastcall hkUpdateRadar(__int64 a1, __int64 a2)
 {
 	oUpdateRadar(a1, a2);
 
-	MainLoop();
+	DrawHUD();
 }
 
 void InitDeviceHook() {

@@ -66,6 +66,9 @@
     <ClCompile Include="FunctionHooks.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="HUDHandler.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="RecordPos.asm">
@@ -121,7 +124,7 @@
     <ClInclude Include="FunctionHooks.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="ParameterHUD.h">
+    <ClInclude Include="HUDHandler.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
