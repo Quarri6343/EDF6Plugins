@@ -62,7 +62,8 @@ void MainProcess() {
 	}
 
 	//EDF.dll + 0x21360E8
-	HWND* hwndPTR = reinterpret_cast<HWND*>(hedfDLL + 0x21360E8);
+	//This is our window handle, the global written to after calling CreateWindow.
+	HWND* hwndPTR = reinterpret_cast<HWND*>(hedfDLL + 0x21360A8);
 	while (*hwndPTR == nullptr) {
 		Sleep(1000);
 	}
@@ -151,7 +152,7 @@ void HookGetPosFunction() {
 bool IsCtrlCPressed() {
 	bool ctrlPressed = GetAsyncKeyState(VK_CONTROL) & 0x8000;
 	bool cPressed = GetAsyncKeyState('C') & 0x8000;
-	return ctrlPressed && cPressed;
+	return GetForegroundWindow() == hwnd && ctrlPressed && cPressed;
 }
 
 void CopyToClipboard(const std::wstring& text) {

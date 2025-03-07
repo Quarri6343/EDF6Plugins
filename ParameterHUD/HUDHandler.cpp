@@ -11,15 +11,15 @@
 extern bool dllReady;
 extern bool dllEnd;
 extern "C" {
-	float xPos;
-	float yPos;
-	float zPos;
+	extern float xPos;
+	extern float yPos;
+	extern float zPos;
 }
 
 ImGuiIO* io = nullptr;
 
 float DEFAULT_POSITION_POS_X = 50.0f;
-float DEFAULT_POSITION_POS_Y = 900.0f;
+float DEFAULT_POSITION_POS_Y = 760.0f;
 float FIXED_FONT_SIZE = 38.0f;
 
 void Initimgui(ID3D11Device* d3dDevice, ID3D11DeviceContext* d3dContext, HWND hwnd) {

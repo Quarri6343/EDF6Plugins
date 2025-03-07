@@ -1,12 +1,12 @@
 
 #include "FunctionHooks.h"
-#include "ParameterHUD.h"
 
 #include <iostream>
 #include <MinHook.h>
 #include <d3d11.h>
 
 extern uintptr_t hedfDLL;
+extern void DrawHUD();
 
 ID3D11Device* d3dDevice = nullptr;
 ID3D11DeviceContext* d3dContext = nullptr;
@@ -111,7 +111,7 @@ void UnInitDeviceHook() {
 }
 
 void InitRadarHook() {
-	void* pUpdateRadar = reinterpret_cast<LPVOID>(hedfDLL + 0x82B1F0);
+	void* pUpdateRadar = reinterpret_cast<LPVOID>(hedfDLL + 0x82B4D0);
 
 	if (MH_CreateHook(pUpdateRadar, &hkUpdateRadar, reinterpret_cast<LPVOID*>(&oUpdateRadar)) != MH_OK) {
 		std::cerr << "Failed to create hook for UpdateRadar!" << std::endl;
